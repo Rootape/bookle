@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { getManifest, pageImageUrl, saveProgress, setNormalPages, type ImageManifest } from '@/app/lib/api';
+import { usePageGestures } from './usePageGestures';
 
 // Leitor em modo imagem: exibe cada página do PDF como imagem renderizada.
 // TODAS as páginas recebem um NEGATIVO por padrão pra combinar com o tema
@@ -99,6 +100,25 @@ export default function ImageReader({
     setPage((p) => Math.max(0, Math.min(pageCount - 1, p + dir)));
   }, [pageCount]);
 
+  // zonas de toque (sem arrasto): esquerda/direita viram página, centro mostra
+  // ou esconde os controles. Reutilizada pelo gesto de toque simples.
+  const tapZones = useCallback((clientX: number, width: number) => {
+    if (clientX < width * 0.33) go(-1);
+    else if (clientX > width * 0.67) go(1);
+    else setChromeVisible((v) => !v);
+  }, [go]);
+
+  // gestos de toque: swipe pra virar, pinça e duplo-toque pra zoom, pan quando
+  // ampliado. Integra tudo numa camada só.
+  const gestures = usePageGestures({
+    onSwipeLeft: () => go(1),    // arrastou pra esquerda → próxima página
+    onSwipeRight: () => go(-1),  // arrastou pra direita → página anterior
+    onTapZones: tapZones,
+  });
+
+  // ao trocar de página, zera qualquer zoom/pan da página anterior
+  useEffect(() => { gestures.reset(); }, [page]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight') go(1);
@@ -108,12 +128,9 @@ export default function ImageReader({
     return () => window.removeEventListener('keydown', onKey);
   }, [go]);
 
-  const onTap = (e: React.MouseEvent<HTMLDivElement>) => {
-    const x = e.clientX - e.currentTarget.getBoundingClientRect().left;
-    const w = e.currentTarget.clientWidth;
-    if (x < w * 0.33) go(-1);
-    else if (x > w * 0.67) go(1);
-    else setChromeVisible((v) => !v);
+  // clique do mouse (desktop): mantém as zonas de toque
+  const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    tapZones(e.clientX - e.currentTarget.getBoundingClientRect().left, e.currentTarget.clientWidth);
   };
 
   if (error) {
@@ -141,22 +158,31 @@ export default function ImageReader({
       position: 'fixed', inset: 0, overflow: 'hidden', background: C.bg,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      <div onClick={onTap} style={{
-        position: 'absolute', inset: 0, cursor: 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 'clamp(0.5rem, 3vw, 2.5rem)',
-      }}>
+      <div
+        onClick={onClick}
+        onTouchStart={gestures.handlers.onTouchStart}
+        onTouchMove={gestures.handlers.onTouchMove}
+        onTouchEnd={gestures.handlers.onTouchEnd}
+        style={{
+          position: 'absolute', inset: 0, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 'clamp(0.5rem, 3vw, 2.5rem)',
+          touchAction: 'none',   // desativa gestos nativos do browser; nós controlamos
+        }}
+      >
         {current ? (
           <img
             src={pageImageUrl(bookId, current.file)}
             alt={`Página ${page + 1}`}
             style={{
               maxWidth: '100%', maxHeight: '100%', objectFit: 'contain',
-              // o negativo: inverte e gira o matiz de volta pra não trocar cores,
-              // só claro↔escuro. Em páginas de texto (preto no branco) vira
-              // branco no preto. Ilustrações ficam intactas (applyInvert=false).
               filter: applyInvert ? 'invert(1) hue-rotate(180deg)' : 'none',
-              transition: 'filter 0.3s',
+              // transform do zoom/pan. Sem transição durante o gesto (resposta
+              // imediata ao dedo); a transição do filtro continua separada.
+              transform: gestures.transform,
+              transition: gestures.isZoomed ? 'filter 0.3s' : 'filter 0.3s, transform 0.2s',
+              transformOrigin: 'center center',
+              willChange: 'transform',
             }}
             draggable={false}
           />
