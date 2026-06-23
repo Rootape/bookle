@@ -1,0 +1,12 @@
+# não enviar pro contexto de build (mantém as imagens leves e o build rápido)
+**/node_modules
+**/.next
+**/out
+**/.venv
+**/__pycache__
+**/*.egg-info
+**/.git
+**/*.db
+storage/
+.venv/
+*.log

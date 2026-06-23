@@ -1,0 +1,38 @@
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #0d0d0f;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* evita realce azul ao tocar nas zonas de virar página no mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a { color: inherit; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+
+/* spinner de carregamento */
+@keyframes leitor-spin {
+  to { transform: rotate(360deg); }
+}
+.leitor-spinner {
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: leitor-spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+@media (prefers-reduced-motion: reduce) {
+  .leitor-spinner { animation-duration: 1.4s; }
+}

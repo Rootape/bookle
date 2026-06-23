@@ -1,0 +1,23 @@
+[project]
+name = "leitor-ingest"
+version = "0.1.0"
+description = "Pipeline de ingestão de PDFs para formato canônico do leitor pessoal"
+requires-python = ">=3.11"
+dependencies = [
+    "PyMuPDF>=1.24",
+]
+
+# Dependências de sistema (NÃO instaláveis via pip) para o branch de OCR:
+#   Arch:   sudo pacman -S ocrmypdf tesseract tesseract-data-por tesseract-data-eng
+# O pipeline funciona sem elas para PDFs nativos; OCR só é exigido em
+# PDFs escaneados/híbridos.
+
+[project.scripts]
+leitor-ingest = "ingest.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["ingest"]

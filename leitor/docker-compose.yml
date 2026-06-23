@@ -1,0 +1,73 @@
+# Sobe o leitor inteiro: redis (fila) + api + worker + web.
+#   docker compose up -d --build
+#
+# Acesso:
+#   web  → http://localhost:3000
+#   api  → http://localhost:8000  (docs em /docs)
+#
+# Para uso externo (iPhone via Tailscale), veja a nota em NEXT_PUBLIC_API_URL.
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # sem porta exposta ao host: só a rede interna do compose precisa do redis
+    volumes:
+      - redis-data:/data
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      LEITOR_REDIS_URL: redis://redis:6379
+      # SQLite num caminho dentro do volume persistente
+      LEITOR_DATABASE_URL: sqlite:////data/leitor.db
+      LEITOR_STORAGE_ORIGINALS: /data/storage/originals
+      LEITOR_STORAGE_CANONICAL: /data/storage/canonical
+    volumes:
+      - app-data:/data
+    depends_on:
+      - redis
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    # mesma imagem da api, comando diferente: roda o worker ARQ
+    command: ["arq", "app.worker.WorkerSettings"]
+    environment:
+      LEITOR_REDIS_URL: redis://redis:6379
+      LEITOR_DATABASE_URL: sqlite:////data/leitor.db
+      LEITOR_STORAGE_ORIGINALS: /data/storage/originals
+      LEITOR_STORAGE_CANONICAL: /data/storage/canonical
+    volumes:
+      - app-data:/data        # MESMO volume da api: compartilham banco e storage
+    depends_on:
+      - redis
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      # Não definimos NEXT_PUBLIC_API_URL: sem ele, o front deriva a URL da API
+      # em RUNTIME do host que serviu a página (mesmo IP, porta 8000). Assim o
+      # mesmo build funciona no desktop (localhost) e no iPhone via Tailscale
+      # (100.x.y.z), sem precisar fixar IP nem rebuildar ao trocar de aparelho.
+      # Só defina essa variável se quiser forçar uma URL específica (ex.: proxy).
+    restart: unless-stopped
+    ports:
+      # front na porta 80: acessível como http://IP (sem porta na URL), o que
+      # fica natural como PWA na tela inicial do iPhone. A API segue na 8000, e
+      # o front a deriva sozinho (mesmo host + :8000).
+      - "80:80"
+    depends_on:
+      - api
+
+volumes:
+  redis-data:
+  app-data:     # banco SQLite + storage (originais e canônico) — persistente
